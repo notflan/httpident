@@ -1,0 +1,2 @@
+=== HTTPIdent/httpi ===
+A protocol for providing identification/authentication of HTTP requests using GPG signing.
