@@ -1,2 +1,50 @@
 === HTTPIdent/httpi ===
 A protocol for providing identification/authentication of HTTP requests using GPG signing.
+This interface allows you to authenticate a HTTP request with your private key to provide secure interfaces to
+HTTP management interfaces and such without having to use password auth.
+
+The protocol runs with 2 HTTP headers, X-ident-token and X-ident-signature. 
+X-ident-token is a token provided by the server to allow you to attempt authentication on a specific URL.
+Usually, the interface provided by the ident script (e.g. https://x/y.ident) should reference a base script with 
+the same name (https://x/y) -`.ident', but this is not required. Ident tokens can expire through timeout, misuse
+or auth. They are single use random hashes and are tied to a specific request URL and IP address.
+X-ident-signature is the signature of the serialised HTTP request (without the X-ident-signature header added) in 
+sorted JSON with whitespaces. The signature is checked after the validity of the token is, if either fails, the token is
+considered expired.
+Successful auths are logged by the server. Failed auths are not logged but have a bit set to show why they failed.
+
+Each request requires a new token, so this is not viable for full web interfaces, nor is it intended for this use.
+
+=== Requirements: Client ===
+GnuPG
+Python 3
+python urllib
+
+=== Usage: Client ===
+Call the script with the request URL:
+ - python httpireq.py httpi://example.com/service?arg1=value
+Or with a specified key:
+ - python httpireq.py key_id_here httpi://example.com/service
+
+httpi://x/y is the same as https://x/y.ident
+
+=== Requirements: Server ===
+GnuPG
+MariaDB
+PHP 7
+Python 3
+
+Note for servers:
+HTTPIdent looks for files that end in `.ident'. Make sure PHP is running on those.
+
+=== Usage: Server ===
+Create a user for HTTPI in MariaDB and create a database for her with full privileges. Set these details in the 
+config file `conf.inc'.
+
+Run the maintain script `setupdb.php' from the command line (make sure `../httpi.inc' resolves).
+
+Set up GPG for the user php-fpm is running on (home can be configured in conf.inc) and import the keys you wish to allow.
+
+Set your server to serve `www', make sure *.ident is passed to PHP.
+
+(TODO: Add script for adding page templates)

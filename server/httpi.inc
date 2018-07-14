@@ -51,6 +51,7 @@ function httpi_setup_database($con)
 		id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
 		token_id INT NOT NULL,
 		authed_by VARCHAR(16) DEFAULT NULL,
+		timestamp TIMESTAMP NOT NULL,
 		index by_token (token_id),
 		CONSTRAINT c_token
 		FOREIGN KEY fk_token(token_id)
