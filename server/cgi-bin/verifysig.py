@@ -19,7 +19,7 @@ try:
 	verified = gpg.verify_data(sigfile, js.encode())
 
 	if not verified:
-		print(json.dumps(["oops"]))
+		print(json.dumps(None))
 	else:
 		ret = dict()
 		ret["username"] = verified.username
@@ -30,4 +30,4 @@ try:
 		ret["trust_text"] = verified.trust_text
 		print(json.dumps(ret))
 except:
-	print(json.dumps(["oops"]))
+	print(json.dumps(None))

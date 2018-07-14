@@ -35,11 +35,28 @@ def serialise_request(req):
 def help():
 	print("Usage: %s [<key id>] <url>" % sys.argv[0])
 
+def real_url(url):
+	if(url.find("?")>-1):
+		return real_url(url[0:url.index("?")])+url[url.index("?"):]
+	else:
+		return url[0:-6]
+
 def parse_url(url):
 	if url.startswith("httpi://"):
+		if(url.find("?")>-1):
+			#handle query string
+			inde = url.index("?")
+			qs = url[inde:]
+			ur = url[0:inde]
+			return "https://%s.ident%s" % (ur[8:], qs)
 		return "https://%s.ident" % url[8:]
 	elif url.startswith("https://") and url.endswith(".ident"):
 		return url
+	elif url.startswith("https://") and url.find("?")>-1:
+		if(url[0:url.index("?")].endswith(".ident")):
+			return url
+		else:
+			return None
 	else:
 		return None
 
@@ -73,7 +90,7 @@ try:
 
 	recv = urlparse(url.scheme+"://"+url.netloc+decd["for"])
 
-	url = urlparse(url.geturl()[0:-6])
+	url = urlparse(real_url(url.geturl()))
 
 	if recv.geturl() != url.geturl():
 		print("WARNING: Authorised URL is not as expected (got %s, expected %s)" % (recv.geturl(), url.geturl()))
@@ -96,10 +113,14 @@ ser = serialise_request(request)
 
 print("You may now be asked for your password to sign the request.")
 
-gpg = gnupg.GPG(gnupghome="~/.gnupg")
+gpg = gnupg.GPG()
 sdump = json.dumps(ser, sort_keys=True)
 sig = gpg.sign(sdump, binary=True, detach=True, keyid=key)
-request.add_header("X-Ident-Signature", base64.b64encode(sig.data))
+
+if(not sig):
+	exit()
+
+request.add_header("X-ident-signature", base64.b64encode(sig.data))
 
 sys.stdout.write("Attempting to use token %s to connect to %s... \n" % (token["token"], token["for"]))
 
