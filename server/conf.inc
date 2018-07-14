@@ -10,4 +10,8 @@ hiConfSet("cgiLocation", __DIR__. "/cgi-bin");
 
 hiConfSet("pythonExecutablePath", "python");
 
+hiConfSet("tempPath", "/tmp");
+
+hiConfSet("gpgHome", "/var/lib/nginx/.gnupg");
+
 ?>

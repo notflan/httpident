@@ -6,6 +6,7 @@ import datetime
 import time
 import binascii
 import requests
+import hashlib
 import ssl
 import gnupg
 import base64
@@ -16,7 +17,7 @@ from urllib.error import HTTPError
 
 def serialise_headers(items):
 	d = dict()
-	for k,v in sorted(items, key=lambda tup: tup[0]):
+	for k,v in items:
 		d[k] = v
 	return d
 
@@ -29,7 +30,7 @@ def serialise_request(req):
 	ser["headers"] = serialise_headers(req.header_items())
 	ser["data"] = req.data	
 
-	return dict(sorted(ser.items(), key=lambda tup: tup[0]))
+	return ser
 
 def help():
 	print("Usage: %s [<key id>] <url>" % sys.argv[0])
@@ -96,10 +97,9 @@ ser = serialise_request(request)
 print("You may now be asked for your password to sign the request.")
 
 gpg = gnupg.GPG(gnupghome="~/.gnupg")
-print(json.dumps(ser))
-sig = gpg.sign(json.dumps(ser), binary=True, detach=True, keyid=key)
-
-request.add_header("X-Ident-Signature", base64.b64encode(str(sig).encode()))
+sdump = json.dumps(ser, sort_keys=True)
+sig = gpg.sign(sdump, binary=True, detach=True, keyid=key)
+request.add_header("X-Ident-Signature", base64.b64encode(sig.data))
 
 sys.stdout.write("Attempting to use token %s to connect to %s... \n" % (token["token"], token["for"]))
 
