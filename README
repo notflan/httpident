@@ -11,7 +11,7 @@ or auth. They are single use random hashes and are tied to a specific request UR
 X-ident-signature is the signature of the serialised HTTP request (without the X-ident-signature header added) in 
 sorted JSON with whitespaces. The signature is checked after the validity of the token is, if either fails, the token is
 considered expired.
-Successful auths are logged by the server. Failed auths are not logged but have a bit set to show why they failed.
+Successful auths are logged by the server. Failed auths are not logged but have a bit set to show why they failed; unless verbose access logging is enabled in the server config.
 
 Each request requires a new token, so this is not viable for full web interfaces, nor is it intended for this use.
 
@@ -27,6 +27,11 @@ Or with a specified key:
  - python httpireq.py key_id_here httpi://example.com/service
 
 httpi://x/y is the same as https://x/y.ident
+
+Query strings must be passed to the ident page as well. 
+If you want to request /page?data=asdf. You must request a token from 
+/page.ident?data=asdf as well.
+
 
 === Requirements: Server ===
 GnuPG
@@ -48,3 +53,16 @@ Set up GPG for the user php-fpm is running on (home can be configured in conf.in
 Set your server to serve `www', make sure *.ident is passed to PHP.
 
 (TODO: Add script for adding page templates)
+
+--- Adding httpi pages ---
+
+To add an ident page it must be accessable as `.*\.ident$'. Configure your 
+server to send .ident pages to PHP. A .ident page shadows the actual page, 
+which is usually named the same, but doesn't have to be. (The client 
+script will typically show a warning when such a redirect occurs.)
+To set up an ident page, simply call `httpi_ident_page(string)' with the page 
+you wish to shadow (e.g. httpi_ident_pave("/example")). Then, to set up
+an authed page, call `httpi_auth_page()'. httpi_auth_page() returns
+the GPG signature details if it succeeds, and dies with error 403 and a message
+if it does not. 
+

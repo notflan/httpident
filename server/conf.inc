@@ -3,6 +3,8 @@ require_once "httpi-tools.inc";
 require_once "logging.inc";
 
 #Misc config
+hiConfSet("m403Message", "403 Forbidden");
+
 hiConfSet("mEnableAccessLog", true);
 hiConfSet("mLoggingLevel", HTTPI_AL_LOW);
 
