@@ -8,11 +8,14 @@ function hiConfSet($name, $value)
 	$hiConfig[$name] = $value;
 }
 
-function hiConfGet($name,$or=null)
+function hiConfGet($name,$instance=null,$or=null)
 {
 	global $hiConfig;
+	if($instance!=null && isset($instance[$name])) return $instance[$name];
+	
 	if(isset($hiConfig[$name])) return $hiConfig[$name];
 	else return $or;
+	
 }
 
 function hiParseHeaders()

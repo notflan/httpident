@@ -66,6 +66,9 @@ function httpi_create_token($con, $url, $ip, $expires_at=null)
 {
 	$tok = httpi_generate_token();
 
+	if($expires_at!=null)
+		$expires_at = date("Y-m-d H:i:s", time()+$expires_at);
+
 	$st = $con->prepare("INSERT INTO tokens (token, url, who, expires_at) VALUES (
 		:token,
 		:url,
@@ -211,6 +214,18 @@ function httpi_auth_page()
 		}
 	}
 	else die403();
+}
+
+function httpi_ident_page($redi, $ins=null)
+{
+	$con = httpi_connect();
+
+	$qs = "?".$_SERVER["QUERY_STRING"];
+	if($qs=="?") $qs = "";
+
+	$tokdata = httpi_create_token($con, $redi.$qs, $_SERVER["REMOTE_ADDR"], hiConfGet("tokExpiresIn", $ins));
+
+	echo(json_encode($tokdata));
 }
 
 ?>

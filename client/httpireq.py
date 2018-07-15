@@ -5,7 +5,7 @@ import sys
 import datetime
 import time
 import binascii
-import requests
+#import requests
 import hashlib
 import ssl
 import gnupg
@@ -101,6 +101,10 @@ try:
 except HTTPError as e:
 	print("Error requesting token: %s" % e)
 	exit()	
+
+print("Token received for %s" % token["who"])
+if (token["until"]!=None):
+	print("Token is valid until %s (UTC)" % token["until"])
 
 request = urllib.request.Request(recv.geturl())
 request.add_header("Connection", "close")
