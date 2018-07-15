@@ -1,5 +1,12 @@
 <?php
 require_once "httpi-tools.inc";
+require_once "logging.inc";
+
+#Misc config
+hiConfSet("mEnableAccessLog", true);
+hiConfSet("mLoggingLevel", HTTPI_AL_LOW);
+
+hiConfSet("mFancyTtyOutput", true);
 
 #Token config
 hiConfSet("tokExpiresIn", 30); //Seconds or null for never
@@ -9,6 +16,7 @@ hiConfSet("dbHost", "127.0.0.1");
 hiConfSet("dbUser", "httpi");
 hiConfSet("dbPasswd", "password");
 hiConfSet("dbName", "httpi");
+hiConfSet("dbEngine", "InnoDB");
 
 #Environment config
 hiConfSet("cgiLocation", __DIR__. "/cgi-bin");

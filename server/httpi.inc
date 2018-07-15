@@ -1,6 +1,7 @@
 <?php
 require_once "httpi-tools.inc";
 require_once "conf.inc";
+require_once "logging.inc";
 
 //Expiry reasons (expire_reason) for tokens
 define("HTTPI_EXR_UNKNOWN", 0);		//Token has not expired or the reason is unknown
@@ -9,6 +10,7 @@ define("HTTPI_EXR_AUTH_FAILURE", 2);	//Token has been unsuccessfully used for au
 define("HTTPI_EXR_TIMEOUT", 3);		//Token has reached timeout
 define("HTTPI_EXR_INVALID_USE", 4);	//Token was attempted to be used for invalid auth (ip/url mismatch)
 define("HTTPI_EXR_ALREADY_EXPIRED", 5);
+
 
 function httpi_generate_token()
 {
@@ -45,8 +47,8 @@ function httpi_setup_database($con)
 		expire_reason INT DEFAULT 0 NOT NULL,
 		INDEX by_token (token),
 		CONSTRAINT token_unique UNIQUE (token)
-	) ENGINE=InnoDB");
-	if(!$ok) return false; else
+	) ENGINE=".hiConfGet("dbEngine"));
+	if(!$ok) return $ok; else
 	$ok = $con->query("CREATE TABLE IF NOT EXISTS authlog (
 		id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
 		token_id INT NOT NULL,
@@ -58,7 +60,35 @@ function httpi_setup_database($con)
 		REFERENCES tokens(id)
 		ON UPDATE CASCADE
 		ON DELETE RESTRICT
-	) ENGINE=InnoDB");
+	) ENGINE=".hiConfGet("dbEngine"));
+	if(!$ok) return $ok; else
+	$ok = $con->query("CREATE TABLE IF NOT EXISTS accesslog (
+		id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+		who INT UNSIGNED NOT NULL,
+		timestamp TIMESTAMP NOT NULL,
+		url VARCHAR(128) NOT NULL,
+		type INT NOT NULL DEFAULT 0,
+		auth_id INT NULL,
+		token_id INT NULL,
+		headers VARCHAR(1024) DEFAULT NULL,
+		query_string VARCHAR(256) DEFAULT NULL,
+		host VARCHAR(128) DEFAULT NULL,
+		is_ident BOOL NOT NULL DEFAULT FALSE,
+		index by_type (type),
+
+		CONSTRAINT c_auth
+		FOREIGN KEY fk_auth(auth_id)
+		REFERENCES authlog(id)
+		ON UPDATE CASCADE
+		ON DELETE RESTRICT,
+
+		CONSTRAINT ac_token
+		FOREIGN KEY afk_token(token_id)
+		REFERENCES tokens(id)
+		ON UPDATE CASCADE
+		ON DELETE RESTRICT
+
+	) ENGINE=".hiConfGet("dbEngine"));
 	return $ok;
 }
 
@@ -118,6 +148,19 @@ function _httpi_get_token_id($con, $tok)
 	}else return null;
 }
 
+function _httpi_get_auth_id_by_token($con, $tok)
+{
+	$tid = _httpi_get_token_id($con, $tok);
+	if($tid==null) return null;
+	$st = $con->prepare("SELECT id FROM authlog WHERE token_id = :tokenid");
+	$st->execute(array("tokenid"=>$tid));
+	if($vt = $st->fetch())
+	{
+		return $vt["id"];
+	}
+	else return null;
+}
+
 function httpi_expire_token($con, $tok, $why, $key=null)
 {	
 	$id = _httpi_get_token_id($con, $tok);
@@ -171,11 +214,11 @@ function die403()
 function httpi_auth_page()
 {
 	$headers = hiParseHeaders();
+	$con = httpi_connect();
 
 	if(isset($headers["X-ident-token"]))
 	{
 		$token = $headers["X-ident-token"];
-		$con = httpi_connect();
 
 		if(isset($headers["X-ident-signature"]))
 		{
@@ -196,24 +239,36 @@ function httpi_auth_page()
 
 				if($keyinfo==null) {
 					httpi_expire_token($con, $token, HTTPI_EXR_AUTH_FAILURE);
+					_httpi_attempt_log($con, HTTPI_A_BAD_AUTH_ATTEMPT, false, null, _httpi_get_token_id($con, $token));
 					die403();
 				}
 				else {
 					httpi_auth_token($con, $token, $keyinfo["key_id"]);
+					_httpi_attempt_log($con, HTTPI_A_AUTH, false, _httpi_get_auth_id_by_token($con, $token), _httpi_get_token_id($con, $token));
 					return $keyinfo;
 				}
 			}
 			else {
 				httpi_expire_token($con, $token, $vd);
+				if($vd == HTTPI_EXR_UNKNOWN)
+					_httpi_attempt_log($con, HTTPI_A_INVALID_TOKEN_AUTH_ATTEMPT, false);
+				elseif($vd== HTTPI_EXR_ALREADY_EXPIRED || $vd == HTTPI_EXR_TIMEOUT)
+					_httpi_attempt_log($con, HTTPI_A_EXPIRED_TOKEN_AUTH_ATTEMPT, false, null, _httpi_get_token_id($con, $token));
+				else
+					_httpi_attempt_log($con, HTTPI_A_INVALID_TOKEN_AUTH_ATTEMPT, false, null, _httpi_get_token_id($con, $token));
 				die403();
 			}
 		}
 		else {
 			httpi_expire_token($con, $token, HTTPI_EXR_INVALID_USE);
+			_httpi_attempt_log($con, HTTPI_A_NOSIG_AUTH_ATTEMPT, false,null,_httpi_get_token_id($con, $token));
 			die403();
 		}
 	}
-	else die403();
+	else {
+		_httpi_attempt_log($con, HTTPI_A_INVALID_HEADER_AUTH_ATTEMPT, false);
+		die403();
+	}
 }
 
 function httpi_ident_page($redi, $ins=null)
@@ -225,7 +280,33 @@ function httpi_ident_page($redi, $ins=null)
 
 	$tokdata = httpi_create_token($con, $redi.$qs, $_SERVER["REMOTE_ADDR"], hiConfGet("tokExpiresIn", $ins));
 
+	if($tokdata!=null)
+		_httpi_attempt_log($con, HTTPI_A_IDENT_REQ, true,null, _httpi_get_token_id($con, $tokdata["token"]), $ins);
+	else
+		_httpi_attempt_log($con, HTTPI_A_IDENT_REQ_DENIED, true, null, null, $ins);
+
 	echo(json_encode($tokdata));
+}
+
+function _httpi_attempt_log($con, $type, $is_ident, $auth_id=null, $token_id=null, $ins=null)
+{
+	if(hial_worth($type, $ins))
+	{
+		$st = $con->prepare("INSERT INTO accesslog (who, url, type, auth_id, token_id, headers, query_string, host, is_ident) VALUES (INET_ATON(:ip), :url, :type, :auth, :token, :headers, :query, :host, :ident)");
+		$st->execute(array(
+			"ip"=> $_SERVER["REMOTE_ADDR"],
+			"url"=>$_SERVER["REQUEST_URI"],
+			"type"=>$type,
+			"auth"=>$auth_id,
+			"token"=>$token_id,
+			"headers"=>json_encode(hiParseHeaders()),
+			"query"=>$_SERVER["QUERY_STRING"],
+			"host"=>$_SERVER["SERVER_NAME"],
+			"ident"=>$is_ident?1:0
+		));	
+		return true;
+	}
+	return false;
 }
 
 ?>

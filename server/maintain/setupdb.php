@@ -5,9 +5,12 @@ $con = httpi_connect();
 
 if($con==null) die("Could not connect to database\n");
 
-if(!httpi_setup_database($con))
-	echo("Error creating tables: (". $con->errno.") ".$con->error."\n");
+$con->setAttribute( PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING );
 
+if(!httpi_setup_database($con)) {
+	echo("Error creating tables: ");
+	print_r($con->errorInfo());
+}
 $con =null;
 
 ?>

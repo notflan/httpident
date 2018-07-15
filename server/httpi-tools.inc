@@ -40,4 +40,9 @@ function hiRequest()
 	return $headers;
 }
 
+function hiAccessLog($ins=null)
+{
+	
+}
+
 ?>
